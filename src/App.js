@@ -3,28 +3,44 @@ import Navigation from './components/navigation/Navigation';
 import Logo from './components/Logo/Logo';
 import ImageLinkForm from './components/ImageLinkForm/ImageLinkForm';
 import Rank from './components/Rank/Rank';
-import Particles from 'react-particles-js';
+import Particles from 'react-tsparticles';
 import FaceRecognition from './components/FaceRecognition/FaceRecognition';
 import SignIn from './components/SignIn/SignIn';
-import Clarifai from 'clarifai';
 import 'tachyons';
 import './App.css';
 import Register from './components/Register/Register';
 
-const app = new Clarifai.App({
-	apiKey: '5e348b3744e94cafa44838c8567b1f2e',
-});
+const initialState = {
+	input: '',
+	imageUrl: '',
+	box: {},
+	route: 'signin',
+	isSignedIn: false,
+	user: {
+		id: '',
+		name: '',
+		email: '',
+		entries: 0,
+		joined: '',
+	},
+};
 class App extends Component {
 	constructor() {
 		super();
-		this.state = {
-			input: '',
-			imageUrl: '',
-			box: {},
-			route: 'signin',
-			isSignedIn: false,
-		};
+		this.state = initialState;
 	}
+
+	loadUser = data => {
+		this.setState({
+			user: {
+				id: data.id,
+				name: data.name,
+				email: data.email,
+				entries: data.entries,
+				joined: data.joined,
+			},
+		});
+	};
 
 	calculateFaceLocation = data => {
 		const clarifaiFace =
@@ -50,33 +66,99 @@ class App extends Component {
 
 	onButtonSubmit = () => {
 		this.setState({ imageUrl: this.state.input });
-		app.models
-			.predict('c0c0ac362b03416da06ab3fa36fb58e3', this.state.input)
-			.then(response =>
-				this.displayFaceBox(this.calculateFaceLocation(response))
-			)
+		fetch('https://polar-chamber-66930.herokuapp.com/imageurl', {
+			method: 'post',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				input: this.state.input,
+			}),
+		})
+			.then(response => response.json())
+			.then(response => {
+				if (response) {
+					fetch('https://polar-chamber-66930.herokuapp.com/image', {
+						method: 'put',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({
+							id: this.state.user.id,
+						}),
+					})
+						.then(response => response.json())
+						.then(count => {
+							this.setState(Object.assign(this.state.user, { entries: count }));
+						})
+						.catch(console.log);
+				}
+				this.displayFaceBox(this.calculateFaceLocation(response));
+			})
 			.catch(err => console.log(err));
 	};
 
-	onRouteChange = page => {
-		this.setState({ route: page }, () => {
-			this.state.route === 'home'
-				? this.setState({ isSignedIn: true })
-				: this.setState({ isSignedIn: false });
-		});
+	onRouteChange = route => {
+		if (route === 'signin') {
+			this.setState(initialState);
+			console.log(this.state);
+		} else if (route === 'home') {
+			this.setState({ isSignedIn: true });
+			console.log(this.state);
+		}
+		this.setState({ route: route });
+		console.log(route, this.state);
 	};
 
 	render() {
 		const particlesOptions = {
+			fpsLimit: 60,
+			interactivity: {
+				detectsOn: 'window',
+				modes: {
+					bubble: {
+						distance: 200,
+						duration: 2,
+						opacity: 0.8,
+						size: 40,
+						speed: 3,
+					},
+				},
+			},
 			particles: {
+				color: {
+					value: '#ffffff',
+				},
+				links: {
+					color: '#ffffff',
+					distance: 150,
+					enable: true,
+					opacity: 0.5,
+					width: 1,
+				},
+				move: {
+					direction: 'none',
+					enable: true,
+					outMode: 'bounce',
+					random: true,
+					speed: 4,
+					straight: false,
+				},
 				number: {
-					value: 100,
 					density: {
 						enable: true,
 						value_area: 800,
 					},
+					value: 80,
+				},
+				opacity: {
+					value: 0.5,
+				},
+				shape: {
+					type: 'circle',
+				},
+				size: {
+					random: true,
+					value: 5,
 				},
 			},
+			detectRetina: true,
 		};
 		return (
 			<div className='App'>
@@ -88,7 +170,10 @@ class App extends Component {
 				{this.state.route === 'home' ? (
 					<Fragment>
 						<Logo />
-						<Rank />
+						<Rank
+							name={this.state.user.name}
+							entries={this.state.user.entries}
+						/>
 						<ImageLinkForm
 							onInputChange={this.onInputChange}
 							onButtonSubmit={this.onButtonSubmit}
@@ -99,9 +184,12 @@ class App extends Component {
 						/>
 					</Fragment>
 				) : this.state.route === 'signin' ? (
-					<SignIn onRouteChange={this.onRouteChange} />
+					<SignIn onRouteChange={this.onRouteChange} loadUser={this.loadUser} />
 				) : (
-					<Register onRouteChange={this.onRouteChange} />
+					<Register
+						onRouteChange={this.onRouteChange}
+						loadUser={this.loadUser}
+					/>
 				)}
 			</div>
 		);
